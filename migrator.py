@@ -33,12 +33,12 @@ def convert_id(text, message_ids):
     return result
 
 class Entry:
-    def __init__(self, path, line_start=0, line_end=None, includes=None, dry_run=False):
-        self.path = path
+    def __init__(self, path, line_start = 0, line_end = None, includes = None, dry_run = False):
+        self.path       = path
         self.line_start = line_start
-        self.line_end = line_end
-        self.includes = includes
-        self.dry_run = dry_run
+        self.line_end   = line_end
+        self.includes   = includes
+        self.dry_run    = dry_run
 
     def load_source(self):
         lines = open(self.path).readlines()
@@ -86,7 +86,7 @@ class Migrator:
 
         messages = []
 
-        # We need to keep track of ids so that we can strip
+        # We need to keep track of IDs so that we can strip
         # trailing numbers if it won't duplicate ID
         message_ids = []
         for element in elements:

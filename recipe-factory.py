@@ -1,153 +1,131 @@
-import argparse
+#!/usr/bin/env python
+
 import os
-from migration import Migration
-from migrator import Entry, Migrator
-from dom import DOMFragment, DOMDiff, ElementDiff, DOMElement
-from dtd import DTDFragment, DTDDiff
+import glob
+import json
+import cmd
+import re
+import convert
 
-def file_lines(path):
-    return len(open(path).readlines())
+class DOM:
+    def __init__(self, path, contents):
+        self.path = path
+        self.contents = contents
 
-def parse_path(repo_path, input, dry_run):
-    entry = {
-        "path": None,
-        "line_start": 0,
-        "line_end": None,
-        "includes": None
-    }
-    chunks = input.split(':')
-    entry["path"] = os.path.join(repo_path, chunks[0])
+ALL_DOMS = []
 
-    entry["line_end"] = file_lines(os.path.join(repo_path, entry["path"]))
+def print_file_list(paths):
+    filenames = []
 
-    if len(chunks) > 1:
-        if chunks[1].isnumeric():
-            entry["line_start"] = int(chunks[1])
-        else:
-            entry["includes"] = chunks[1]
-            return Entry(entry["path"], entry["line_start"], entry["line_end"], entry["includes"])
+    for i in range(len(paths)):
+        filename = paths[i].split('/')[-1]
 
-    if len(chunks) > 2:
-        if chunks[2].isnumeric():
-            entry["line_end"] = int(chunks[2])
-        else:
-            entry["includes"] = chunks[2]
-            return Entry(entry["path"], entry["line_start"], entry["line_end"], entry["includes"])
-    
-    if len(chunks) > 3:
-        entry["includes"] = chunks[3]
-    return Entry(entry["path"], entry["line_start"], entry["line_end"], entry["includes"], dry_run)
+        filenames.append(str(i).rjust(4, ' ') + ': ' + filename)
 
-def init_migrator(parser):
-    args = parser.parse_args()
-    bug_id = args.bug_id
-    repo = args.repo
-    dry_run = args.dry_run
+    for filename in filenames:
+        if len(filename) > 33:
+            filenames[filenames.index(filename)] = filename[:33] + '~'
 
-    dom_entries = []
-    dtd_entries = []
-    ftl_entries = []
+    cli = cmd.Cmd()
+    cli.columnize(filenames, displaywidth=120)
 
-    if args.dom:
-        for path in args.dom:
-            entry = parse_path(repo, path, dry_run)
-            dom_entries.append(entry)
+def get_migrated_dtd_paths():
+    migration_path  = './comm/python/l10n/tb_fluent_migrations/completed'
+    migration_files = os.listdir(migration_path)
+    dtd_paths       = []
 
-    if args.dtd:
-        for path in args.dtd:
-            entry = parse_path(repo, path, dry_run)
-            dtd_entries.append(entry)
+    # Iterate over existing migrations
+    for file in migration_files:
+        path = os.path.join(migration_path, file)
 
-    if args.ftl:
-        for path in args.ftl:
-            entry = parse_path(repo, path, dry_run)
-            ftl_entries.append(entry)
+        with open(path) as file:
+            contents = file.read()
 
-    if args.interactive:
-        print('\nConvert to Fluent, interactive mode\n')
-        result = input(f'Bug ID ({bug_id}): ')
-        if result:
-            bug_id = result
+            # Find all DTD files referenced in migration
+            matches = re.findall('from_path *= *"[^"]+"', contents)
+            paths   = [match.split('"')[1] for match in matches]
+            paths   = ['./comm/' + path for path in paths if path.split('.')[-1] == 'dtd']
 
-        result = input(f'Path to repository ("{repo}"): ')
-        if result:
-            repo = result
+            if paths:
+                dtd_paths.extend(paths)
 
-        i = 0
-        while True:
-            candidate = dom_entries[i] if len(dom_entries) > i else None
-            suggestion = f' ("{candidate.path}")' if candidate else ''
-            file = input(f'XUL/XHTML/HTML file{suggestion}: ')
-            if not file and not candidate:
-                break
-            line_start = input(f'First line ({candidate.line_start}): ')
-            line_end = input(f'Last line ({candidate.line_end}): ')
-            follow_includes = input(f'Follow includes? ({"Y" if candidate.includes else "N"}): ')
-            i += 1
+    # Remove duplicates from DTD file list
+    dtd_paths = list(dict.fromkeys(dtd_paths))
 
-    migrator = Migrator(bug_id, repo, args.description)
-    for entry in dom_entries:
-        migrator.add_dom_entry(entry)
+    return dtd_paths
 
-    for entry in dtd_entries:
-        migrator.add_dtd_entry(entry)
+def get_unmigrated_dtd_paths():
+    #for path in glob.glob('./**/*.dtd', recursive = True):
+    #    with open(path) as file:
 
-    for entry in ftl_entries:
-        migrator.add_ftl_entry(entry)
+    migrated_paths = get_migrated_dtd_paths()
 
-    return migrator
+    dtd_paths             = glob.glob('./**/*.dtd', recursive = True)
+    locale_agnostic_paths = [re.sub('locales/[^/]+/', '', path) for path in dtd_paths]
+    dtd_paths             = [path for path in dtd_paths if locale_agnostic_paths[dtd_paths.index(path)] not in migrated_paths]
+
+    return dtd_paths
+
+def get_dom_paths(dtd_path):
+    dom_paths = []
+    if not ALL_DOMS:
+        dom_paths.extend(glob.glob('./**/*.xul', recursive = True))
+        dom_paths.extend(glob.glob('./**/*.xhtml', recursive = True))
+        dom_paths.extend(glob.glob('./**/*.html', recursive = True))
+
+        dom_paths = [path for path in dom_paths if not re.search("/tests?/", path)]
+
+        for path in dom_paths:
+            with open(path) as file:
+                contents = file.read()
+                ALL_DOMS.append(DOM(path, contents))
+
+    dom_paths = []
+    for dom in ALL_DOMS:
+        # Find all DOMs referencing DTD file
+        if dom.contents.find('/' + dtd_path.split('/')[-1]) != -1:
+            dom_paths.append(dom.path)
+
+    return dom_paths
+
+def get_dtds():
+    dtd_paths = get_unmigrated_dtd_paths()
+    dtds = []
+
+    for path in dtd_paths:
+        dtds.append({'dtd_path': path, 'dom_paths': get_dom_paths(path)})
+
+    return dtds
+
+def main():
+    cache_path = './dtd-cache.json'
+
+    if os.path.exists(cache_path):
+        with open(cache_path) as file:
+            dtds = json.load(file)
+    else:
+        print('No DTD cache found. Generating DTD cache...')
+
+        dtds = get_dtds()
+        dtds_json = json.dumps(dtds, indent=4)
+
+        with open(cache_path, 'w') as file:
+            file.write(dtds_json)
+
+    print_file_list([dtd['dtd_path'] for dtd in dtds])
+    print('The above DTD files have not been migrated.')
+    input('Which file would you like to migrate? #')
+
+    return
+
+    args = [
+
+
+
+
+    ]
+
+    convert.main(args)
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(
-        description='Convert Mozilla project strings to Fluent')
-    parser.add_argument('-i', '--interactive',
-                        required=False,
-                        action='store_true',
-                        help='Turn on an interactive mode.')
-    parser.add_argument('--bug_id',
-                        help='Bugzilla ID of the issue.')
-    parser.add_argument('--description',
-                        help='Migration description.')
-    parser.add_argument('--repo',
-                        required=False,
-                        default="./",
-                        help='Path to repository')
-    parser.add_argument('--dom', action='append',
-                        required=False,
-                        help='Path to XUL/XHTML/HTML fragments to be converted.')
-    parser.add_argument('--dtd', action='append',
-                        required=False,
-                        help='Path to DTD fragments to be converted.')
-    parser.add_argument('--ftl', action='append',
-                        required=False,
-                        help='Path to FTL fragments to be converted.')
-    parser.add_argument('--js', action='append',
-                        required=False,
-                        help='Path to a JS file to be converted.')
-    parser.add_argument('--dry-run',
-                        required=False,
-                        action='store_true',
-                        help='Turn on dry run.')
-
-    migrator = init_migrator(parser)
-
-    migration = migrator.migrate()
-
-    for dom in migrator.dom_fragments:
-        if dom.diffs:
-            new_chunk = dom.serialize()
-            dom.entry.override(new_chunk)
-
-    for dtd in migrator.dtd_fragments:
-        if dtd.diffs:
-            new_chunk = dtd.serialize()
-            dtd.entry.override(new_chunk)
-
-    for ftl in migrator.ftl_fragments:
-        if ftl.diffs:
-            new_chunk = ftl.serialize()
-            ftl.entry.override(new_chunk)
-
-    entry = Entry(os.path.join(migrator.repo_path, f"python/l10n/fluent_migrations/bug_{migration.bug_id}_migration.py"))
-    new_chunk = migration.serialize()
-    entry.override(new_chunk)
+    main()
