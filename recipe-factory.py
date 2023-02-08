@@ -8,7 +8,7 @@ from dtd import DTDFragment, DTDDiff
 def file_lines(path):
     return len(open(path).readlines())
 
-def parse_path(mc_path, input, dry_run):
+def parse_path(repo_path, input, dry_run):
     entry = {
         "path": None,
         "line_start": 0,
@@ -16,9 +16,9 @@ def parse_path(mc_path, input, dry_run):
         "includes": None
     }
     chunks = input.split(':')
-    entry["path"] = os.path.join(mc_path, chunks[0])
+    entry["path"] = os.path.join(repo_path, chunks[0])
 
-    entry["line_end"] = file_lines(os.path.join(mc_path, entry["path"]))
+    entry["line_end"] = file_lines(os.path.join(repo_path, entry["path"]))
 
     if len(chunks) > 1:
         if chunks[1].isnumeric():
@@ -41,7 +41,7 @@ def parse_path(mc_path, input, dry_run):
 def init_migrator(parser):
     args = parser.parse_args()
     bug_id = args.bug_id
-    mc = args.mc
+    repo = args.repo
     dry_run = args.dry_run
 
     dom_entries = []
@@ -50,17 +50,17 @@ def init_migrator(parser):
 
     if args.dom:
         for path in args.dom:
-            entry = parse_path(mc, path, dry_run)
+            entry = parse_path(repo, path, dry_run)
             dom_entries.append(entry)
 
     if args.dtd:
         for path in args.dtd:
-            entry = parse_path(mc, path, dry_run)
+            entry = parse_path(repo, path, dry_run)
             dtd_entries.append(entry)
 
     if args.ftl:
         for path in args.ftl:
-            entry = parse_path(mc, path, dry_run)
+            entry = parse_path(repo, path, dry_run)
             ftl_entries.append(entry)
 
     if args.interactive:
@@ -69,9 +69,9 @@ def init_migrator(parser):
         if result:
             bug_id = result
 
-        result = input(f'Path to mozilla-central ("{mc}"): ')
+        result = input(f'Path to repository ("{repo}"): ')
         if result:
-            mc = result
+            repo = result
 
         i = 0
         while True:
@@ -85,7 +85,7 @@ def init_migrator(parser):
             follow_includes = input(f'Follow includes? ({"Y" if candidate.includes else "N"}): ')
             i += 1
 
-    migrator = Migrator(bug_id, mc, args.description)
+    migrator = Migrator(bug_id, repo, args.description)
     for entry in dom_entries:
         migrator.add_dom_entry(entry)
 
@@ -99,7 +99,7 @@ def init_migrator(parser):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description='Convert Mozilla UI to Fluent')
+        description='Convert Mozilla project strings to Fluent')
     parser.add_argument('-i', '--interactive',
                         required=False,
                         action='store_true',
@@ -108,10 +108,10 @@ if __name__ == '__main__':
                         help='Bugzilla ID of the issue.')
     parser.add_argument('--description',
                         help='Migration description.')
-    parser.add_argument('--mc',
+    parser.add_argument('--repo',
                         required=False,
                         default="./",
-                        help='Path to mozilla-central')
+                        help='Path to repository')
     parser.add_argument('--dom', action='append',
                         required=False,
                         help='Path to XUL/XHTML/HTML fragments to be converted.')
@@ -148,6 +148,6 @@ if __name__ == '__main__':
             new_chunk = ftl.serialize()
             ftl.entry.override(new_chunk)
 
-    entry = Entry(os.path.join(migrator.mc_path, f"python/l10n/fluent_migrations/bug_{migration.bug_id}_migration.py"))
+    entry = Entry(os.path.join(migrator.repo_path, f"python/l10n/fluent_migrations/bug_{migration.bug_id}_migration.py"))
     new_chunk = migration.serialize()
     entry.override(new_chunk)

@@ -55,9 +55,9 @@ class Entry:
                 out.write("".join(result))
 
 class Migrator:
-    def __init__(self, bug_id, mc_path, description):
+    def __init__(self, bug_id, repo_path, description):
         self.bug_id = bug_id
-        self.mc_path = mc_path
+        self.repo_path = repo_path
         self.description = description
 
         self.dom_fragments = []
@@ -170,7 +170,7 @@ class Migrator:
                     else:
                         print(f"Failed to find an entity {attr['entity_id']}")
 
-        migration = Migration(self.bug_id, self.mc_path, self.description)
+        migration = Migration(self.bug_id, self.repo_path, self.description)
 
         ftl = self.ftl_fragments[0]
         ftl_diff = FTLDiff()

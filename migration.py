@@ -1,7 +1,7 @@
 class Migration:
-    def __init__(self, bug_id=None, mc_path=None, description=None):
+    def __init__(self, bug_id=None, repo_path=None, description=None):
         self.bug_id = bug_id
-        self.mc_path = mc_path
+        self.repo_path = repo_path
         self.description = description
         self.helpers = []
         self.migrate_ops = []
@@ -17,8 +17,8 @@ class Migration:
 
     def relative_path(self, path):
         result = path
-        if result.startswith(self.mc_path):
-            result = path[len(self.mc_path):]
+        if result.startswith(self.repo_path):
+            result = path[len(self.repo_path):]
         if result.startswith("./"):
             result = result[2:]
         return result
