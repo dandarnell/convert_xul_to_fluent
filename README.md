@@ -1,4 +1,6 @@
-This is an attempt to develop a script that aids Firefox migration to Fluent.
+This is a Fluent migration script designed to remove the technical burden of creating new migration recipes for Mozilla Thunderbird. The script crawls the source tree and finds unmigrated DTD files, along with any files that source the DTD file.
+
+Recipe Factory builds on the awesome work of Zibi Braniecki's XUL-to-Fluent migration script (https://github.com/zbraniecki/convert_xul_to_fluent).
 
 Installing:
 
@@ -6,11 +8,7 @@ Installing:
 pip3 install -r requirements.txt
 ```
 
-Example usage (taken from https://bugzilla.mozilla.org/show_bug.cgi?id=1592043):
-
-```
-# If the FTL file doesn't exist yet:
-touch ~/Code/mozilla-central/devtools/client/locales/en-US/toolbox.ftl
-
-python3 convert.py --bug_id 1592043 --description "Migrate toolbox options strings from DTD to FTL" --mc ~/Code/mozilla-central --dom devtools/client/framework/toolbox-options.xhtml --dtd devtools/client/locales/en-US/toolbox.dtd --ftl devtools/client/locales/en-US/toolbox.ftl
-```
+Not yet added:
+- JS dependency crawling
+- DOM string sorting
+- Side-by-side recipe tweaking
