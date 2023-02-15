@@ -114,15 +114,27 @@ def main():
 
     print_file_list([dtd['dtd_path'] for dtd in dtds])
     print('The above DTD files have not been migrated.')
-    input('Which file would you like to migrate? #')
+    dtd_index = input('Which DTD file would you like to migrate? #')
+    dtd = dtds[file_index]
 
-    return
+    print_file_list(dtd['dom_paths'])
+    print('The above DOM files make use of ' + dtd['dtd_path'].split('/')[-1] + '.')
+    dom_index = input('Which DOM file would you like to migrate? #')
+    dom_path = dtd['dom_paths'][dom_index]
 
     args = [
-
-
-
-
+        '--bug_id',
+        bug_id,
+        '--description',
+        "Migrate toolbox options strings from DTD to FTL",
+        '--repo',
+        'comm/',
+        '--dtd',
+        dtd['dtd_path'],
+        '--dom',
+        dom_path,
+        '--ftl',
+        ''
     ]
 
     convert.main(args)
